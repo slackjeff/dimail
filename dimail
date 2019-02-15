@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+#-----HEADER------------------------------------------------------------------#
+#AUTOR
+# Jefferson Rocha <lrcjefferson@gmail.com>
+#
+#PROGRAMA
+# diMail
+#
+#DESCRIÇÃO
+# Programa que envia e-mail com um front do dialog! A anexação da configuração
+# do Mutt é feito atraves do próprio fonte do programa, preecha #corretamente
+# e comece a utilizar!
+#
+#LICENÇA
+# diMail - An Automated packaging tool for Slackware Linux
+# Copyright (C) 2018 Jefferson Rocha
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+#VERSÃO
+# 1.0
+#
+#-----------------------------------------------------------------------------#
+
+#---CONFIGURACOES--------#
+seu_nome="nome"
+seu_email="user@gmail.com"
+seu_usuario="user" # exemplo lrcjefferson de lrcjefferson@gmail.com
+sua_senha="senha"
+#------------------------#
+
+#----NÃO MEXER DAQUI PARA BAIXO!----#
+
+#---VARS-----------------#
+mail_arq="/tmp/mail.txt"
+mutt_conf="/tmp/.conf"
+#------------------------#
+
+#---FUNÇÕES--------------#
+# Envia as configurações do mutt para um
+# arquivo temporario, assim o mutt consegue
+# enviar o e-mail com as configurações desejadas.
+conf_muttrc(){
+cat > /tmp/.conf <<END
+set from="$seu_email"
+set realname="$seu_nome"
+set imap_user="$seu_email"
+set imap_pass="$sua_senha"
+
+set smtp_url="smtps://${seu_usuario}@smtp.gmail.com:465/"
+set smtp_pass="$sua_senha"
+set ssl_starttls=yes
+set ssl_force_tls=yes
+END
+}
+
+limpa_cache(){
+if rm "$mutt_conf"; then
+	 if rm "$mail_arq"; then
+	 		echo -e "Arquivos ${mutt_conf} e ${mail_arq}, foram apagados com sucesso."
+else
+	 echo -e "Não foi possivel apagar os arquivos:\n${mutt_conf} 'e' ${mail_arq}"
+	fi
+fi
+}
+
+#---TESTE INICIAIS-------#
+# Dependencias necessárias para prosseguir (Dialog, OpenSSL, Mutt)
+[[ $(which dialog 2>/dev/null) ]] || { echo "Necessita do Dialog para prosseguir" ; exit 1 ;}
+[[ $(which openssl 2>/dev/null) ]] || { echo "Necessita do OpenSSL para prosseguir" ; exit 1 ;}
+[[ $(which mutt 2>/dev/null) ]] || { echo "Necessita do Mutt para prosseguir" ; exit 1 ;}
+
+# Usuário tem internet?
+# Se não ter bye!
+if ! wget -q --spider www.google.com; then
+	dialog --infobox "Sem Internet! Conexe e retorne." 0 0
+	exit 1
+fi
+
+# Se o arquivo temporario de armazenamento
+# do email não existir, vamos criar!
+[[ ! -e "$mail_arq" ]] && > "$mail_arq"
+
+#--Começa Aqui-----------#
+# Qual o Email de destino?
+while :; do
+		mail_destino=$(
+			  dialog --stdout 								\
+			  --title "DESTINO" 							\
+			  --inputbox "E-MAIL do DESTINO " \
+			  8 50
+)
+		# Se entrada for nula leva esporro!
+		if [[ -z "$mail_destino" ]]; then
+				dialog --title "Mensagem para o Além." 																		\
+				--ok-label "Retornar" 																										\
+				--msgbox "Você vai enviar o e-mail para o além? digite um E-MAIL válido!" \
+				8 40
+		else
+				break
+		fi
+done
+
+# Corpo da mensagem será escrito aqui.
+# e enviado para o arquivo temporario.
+mensagem=$(
+	dialog --stdout                                   				 \
+  --title "Digite O Corpo da Mensagem." --backtitle "diMail" \
+	--ok-button "Enviar" 		  										    				 \
+	--editbox "$mail_arq" 			  								    				 \
+  0 0 > "$mail_arq"
+)
+
+# Chamando função para gerar arquivo temporário
+conf_muttrc
+# Vamos enviar o email?
+if mutt -s "Assunto" "$mail_destino" -F "/tmp/.conf" < "$mail_arq" 2> /dev/null; then
+		dialog --title "CONCLUÍDO!"                   \
+		--msgbox "E-mail enviado com sucesso!"        \
+ 	  6 30
+else
+	dialog --infobox "Houve um erro" 0 0
+fi
+
+limpa_cache # Limpando arquivos temporarios!
